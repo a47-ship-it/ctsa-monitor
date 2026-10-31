@@ -28,13 +28,23 @@ def clean(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
+def get_text(page):
+    parts = []
+    for f in page.frames:
+        try:
+            parts.append(f.inner_text("body"))
+        except Exception:
+            pass
+    return "\n".join(parts)
+
+
 def read_page(page):
-    text = page.inner_text("body")
-    m_race = re.search(r"即時賽事\s*(.*?)\s*即時檢錄項目", text, re.S)
-    m_chk = re.search(r"即時檢錄項目\s*(.*?)\s*即時比賽項目", text, re.S)
+    text = get_text(page)
+    m_race = re.search(r"賽事\s*(.*?)\s*即時檢錄項目", text, re.S)
+    m_chk = re.search(r"檢錄項目\s*(.*?)\s*即時比賽項目", text, re.S)
     race = clean(m_race.group(1)) if m_race else ""
     checkin = clean(m_chk.group(1)) if m_chk else None
-    return race, checkin
+    return race, checkin, text
 
 
 def main():
@@ -46,11 +56,13 @@ def main():
         page = browser.new_page()
         while time.time() < end:
             try:
-                page.goto(URL, wait_until="networkidle", timeout=60000)
-                race, checkin = read_page(page)
+                resp = page.goto(URL, wait_until="networkidle", timeout=60000)
+                page.wait_for_timeout(4000)
+                race, checkin, text = read_page(page)
+                print("狀態碼:", resp.status if resp else None, flush=True)
                 print("檢錄:", checkin, flush=True)
                 if checkin is None:
-                    print("找不到「即時檢錄項目」區塊", flush=True)
+                    print("找不到區塊,頁面開頭:", clean(text)[:300], flush=True)
                 elif checkin != last:
                     if checkin:
                         prefix = "(目前) " if last is None else ""
